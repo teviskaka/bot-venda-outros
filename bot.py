@@ -33,11 +33,7 @@ db = load_db()
 
 # ================== PACOTES ==================
 PACOTES_SALAS = {
-    "50": {"label": "10 Salas 💎", "preco": "R$ 3,00", "mensagem": "Crie Sala Automaticamente!"},
-    "100": {"label": "30 Salas 💎", "preco": "R$ 6,00", "mensagem": "Crie Sala Automaticamente!"},
-    "300": {"label": "50 Salas 💎", "preco": "R$ 10,00", "mensagem": "Crie Sala Automaticamente!"},
-    "500": {"label": "100 Salas 💎", "preco": "R$ 18,00", "mensagem": "Crie Sala Automaticamente!"},
-    "1000": {"label": "300 Salas 💎", "preco": "R$ 60,00", "mensagem": "Crie Sala Automaticamente!"}
+    "50": {"label": "Sensi Android 💎", "preco": "R$ 3,00", "mensagem": "Melhor sensi android!"},
 }
 
 # ================== VIEW ADMIN ==================
@@ -100,7 +96,7 @@ class ProduUpView(discord.ui.View):
         )
 
         embed.set_image(
-            url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/ChatGPT_Image_30_de_dez._de_2025_22_36_10.png"
+            url="https://cdn.discordapp.com/attachments/1455009230015828089/1455743819772465275/ChatGPT_Image_30_de_dez._de_2025_23_05_41.png?ex=6955d695&is=69548515&hm=e368d5f880cb442509e03c3d1ef014bf70d2710993844e738e94398131ee21e1&"
         )
 
         button = discord.ui.Button(label="Abrir Carrinho", style=discord.ButtonStyle.green, emoji="🛒")
@@ -194,7 +190,7 @@ async def produup(interaction: discord.Interaction):
         color=discord.Color.blue()
     )
     embed.set_image(
-        url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/ChatGPT_Image_30_de_dez._de_2025_22_36_10.png"
+        url="https://cdn.discordapp.com/attachments/1455009230015828089/1455743819772465275/ChatGPT_Image_30_de_dez._de_2025_23_05_41.png?ex=6955d695&is=69548515&hm=e368d5f880cb442509e03c3d1ef014bf70d2710993844e738e94398131ee21e1&"
     )
     await interaction.response.send_message(embed=embed, view=ProduUpView())
 
@@ -224,3 +220,4 @@ async def produup3(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=ProduUpView("Mensagem UPDOW 3: Edite aqui."))
 
 bot.run(TOKEN)
+
