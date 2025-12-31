@@ -67,8 +67,9 @@ class AdminActions(discord.ui.View):
 
 # ================== VIEW PRODUUP ==================
 class ProduUpView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, mensagem_extra="Selecione o pacote desejado no menu abaixo para prosseguir com a compra."):
         super().__init__(timeout=None)
+        self.mensagem_extra = mensagem_extra
 
         options = [
             discord.SelectOption(
@@ -196,5 +197,30 @@ async def produup(interaction: discord.Interaction):
         url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/ChatGPT_Image_30_de_dez._de_2025_22_36_10.png"
     )
     await interaction.response.send_message(embed=embed, view=ProduUpView())
+
+# NOVOS COMANDOS PRODUUP2 E PRODUUP3
+@bot.tree.command(name="produup2", description="Menu de pacotes de salas 2")
+async def produup2(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="SALAS AUTOMATICAS 2! - GB STORE",
+        description="Mensagem UPDOW 2: Edite aqui como quiser.",
+        color=discord.Color.green()
+    )
+    embed.set_image(
+        url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/ChatGPT_Image_30_de_dez._de_2025_22_36_10.png"
+    )
+    await interaction.response.send_message(embed=embed, view=ProduUpView("Mensagem UPDOW 2: Edite aqui."))
+
+@bot.tree.command(name="produup3", description="Menu de pacotes de salas 3")
+async def produup3(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="SALAS AUTOMATICAS 3! - GB STORE",
+        description="Mensagem UPDOW 3: Edite aqui como quiser.",
+        color=discord.Color.purple()
+    )
+    embed.set_image(
+        url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/ChatGPT_Image_30_de_dez._de_2025_22_36_10.png"
+    )
+    await interaction.response.send_message(embed=embed, view=ProduUpView("Mensagem UPDOW 3: Edite aqui."))
 
 bot.run(TOKEN)
