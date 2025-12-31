@@ -1,17 +1,16 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import json
 import os
 import sys
 
-# ================= TOKEN =================
+# ================== TOKEN ==================
 TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
     print("❌ ERRO: DISCORD_TOKEN não definido")
     sys.exit(1)
 
-# ================= DATABASE =================
+# ================== DATABASE ==================
 DB_FILE = "database.json"
 
 def load_db():
@@ -19,274 +18,181 @@ def load_db():
         return {
             "config": {
                 "pix": "Não configurado",
-                "cargo_admin": None,
-                "categoria": None
-            },
-            "produtos": {}
+                "cargo_owner": None,
+                "cat_suporte": None
+            }
         }
     with open(DB_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def save_db(db):
+def save_db(data):
     with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=4, ensure_ascii=False)
+        json.dump(data, f, indent=4, ensure_ascii=False)
 
 db = load_db()
 
-# ================= BOT =================
-intents = discord.Intents.default()
-intents.message_content = True  # Necessário para alguns recursos
-bot = commands.Bot(command_prefix="!", intents=intents)
+# ================== PACOTES ==================
+PACOTES_SALAS = {
+    "50": {"label": "10 Salas 💎", "preco": "R$ 3,00", "mensagem": "Crie Sala Automaticamente!"},
+}
+
+# ================== VIEW ADMIN ==================
+class AdminActions(discord.ui.View):
+    def __init__(self, cliente_id, produto_nome):
+        super().__init__(timeout=None)
+        self.cliente_id = cliente_id
+        self.produto = produto_nome
+
+    @discord.ui.button(label="Aprovar Pagamento", style=discord.ButtonStyle.success, emoji="✅")
+    async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if db["config"]["cargo_owner"] not in [r.id for r in interaction.user.roles]:
+            return await interaction.response.send_message("❌ Apenas o dono pode aprovar.", ephemeral=True)
+
+        membro = interaction.guild.get_member(self.cliente_id)
+        if membro:
+            await interaction.channel.send(
+                f"✅ **Pagamento Aprovado!**\n{membro.mention}, **aguarde estamos preparando seu produto!**"
+            )
+            await interaction.response.send_message("Confirmado!", ephemeral=True)
+
+    @discord.ui.button(label="Fechar Carrinho", style=discord.ButtonStyle.danger, emoji="🔒")
+    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if db["config"]["cargo_owner"] not in [r.id for r in interaction.user.roles]:
+            return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+        await interaction.channel.delete()
+
+# ================== VIEW PRODUUP ==================
+class ProduUpView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        options = [
+            discord.SelectOption(
+                label=f"{v['label']} - {v['preco']}",
+                description=v["mensagem"],
+                value=k
+            ) for k, v in PACOTES_SALAS.items()
+        ]
+
+        select = discord.ui.Select(
+            placeholder="📦 Escolha o seu pacote de salas",
+            options=options
+        )
+        select.callback = self.select_callback
+        self.add_item(select)
+
+    async def select_callback(self, interaction: discord.Interaction):
+        data = PACOTES_SALAS[interaction.data["values"][0]]
+
+        embed = discord.Embed(
+            title="📊 Pacote Selecionado",
+            description=(
+                f"Pacote: **{data['label']}**\n"
+                f"Preço: **{data['preco']}**\n\n"
+                "Clique no botão abaixo para abrir o carrinho."
+            ),
+            color=discord.Color.orange()
+        )
+
+        # Imagem atualizada apenas com 1 UpDown e texto Sensi iOS
+        embed.set_image(
+            url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/sensi_ios.png"
+        )
+
+        button = discord.ui.Button(label="Abrir Carrinho", style=discord.ButtonStyle.green, emoji="🛒")
+
+        async def abrir(inter):
+            cfg = db["config"]
+            guild = inter.guild
+            categoria = guild.get_channel(cfg["cat_suporte"])
+
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                inter.user: discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True
+                ),
+                guild.get_role(cfg["cargo_owner"]): discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True
+                )
+            }
+
+            canal = await guild.create_text_channel(
+                name=f"🆙-{inter.user.name}",
+                category=categoria,
+                overwrites=overwrites
+            )
+
+            emb = discord.Embed(
+                title="💳 Pagamento PIX",
+                description=(
+                    f"Produto: **{data['label']}**\n"
+                    f"Valor: **{data['preco']}**\n\n"
+                    f"Pix: `{cfg['pix']}`\n\n"
+                    "📢 **ENVIE O COMPROVANTE AQUI!**"
+                ),
+                color=discord.Color.blue()
+            )
+
+            await canal.send(
+                content=inter.user.mention,
+                embed=emb,
+                view=AdminActions(inter.user.id, data["label"])
+            )
+
+            await inter.response.send_message(f"✅ Carrinho criado: {canal.mention}", ephemeral=True)
+
+        button.callback = abrir
+        view = discord.ui.View()
+        view.add_item(button)
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+# ================== BOT ==================
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.members = True
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        try:
+            await self.tree.sync()
+            print("✅ Slash commands sincronizados globalmente")
+        except Exception as e:
+            print(f"❌ Erro ao sincronizar: {e}")
+
+bot = MyBot()
 
 @bot.event
 async def on_ready():
-    print(f"🔄 Sincronizando comandos...")
-    try:
-        # Sincroniza os comandos globalmente
-        synced = await bot.tree.sync()
-        print(f"✅ Bot online como {bot.user}")
-        print(f"✅ {len(synced)} comandos sincronizados")
-        print(f"📋 Comandos: {[cmd.name for cmd in synced]}")
-    except Exception as e:
-        print(f"❌ Erro ao sincronizar: {e}")
+    print(f"✅ Bot online como {bot.user}")
 
-# ================= VERIFICAÇÃO DE ADMIN =================
-def is_admin():
-    async def predicate(interaction: discord.Interaction):
-        cargo_admin_id = db["config"].get("cargo_admin")
-        
-        # Se não há cargo configurado, apenas admins do servidor podem usar
-        if not cargo_admin_id:
-            return interaction.user.guild_permissions.administrator
-        
-        # Verifica se tem o cargo configurado OU é admin
-        has_role = any(role.id == cargo_admin_id for role in interaction.user.roles)
-        is_server_admin = interaction.user.guild_permissions.administrator
-        
-        return has_role or is_server_admin
-    
-    return app_commands.check(predicate)
-
-# ================= COMANDOS =================
-@bot.tree.command(name="configurar", description="Configura PIX, cargo admin e categoria")
-@app_commands.describe(
-    pix="Chave PIX para pagamentos",
-    cargo_admin="Cargo que pode gerenciar o bot",
-    categoria="Categoria onde os tickets serão criados"
-)
-@app_commands.default_permissions(administrator=True)
-async def configurar(
-    interaction: discord.Interaction,
-    pix: str,
-    cargo_admin: discord.Role,
-    categoria: discord.CategoryChannel
-):
-    db["config"]["pix"] = pix
-    db["config"]["cargo_admin"] = cargo_admin.id
-    db["config"]["categoria"] = categoria.id
+# ================== COMANDOS ==================
+@bot.tree.command(name="setup", description="Configura PIX e Admin")
+async def setup(interaction: discord.Interaction, pix: str, cargo_admin: discord.Role, categoria: discord.CategoryChannel):
+    db["config"].update({
+        "pix": pix,
+        "cargo_owner": cargo_admin.id,
+        "cat_suporte": categoria.id
+    })
     save_db(db)
-    
-    embed = discord.Embed(
-        title="✅ Configuração Salva",
-        description="As configurações foram atualizadas com sucesso!",
-        color=discord.Color.green()
-    )
-    embed.add_field(name="💳 PIX", value=pix, inline=False)
-    embed.add_field(name="👑 Cargo Admin", value=cargo_admin.mention, inline=False)
-    embed.add_field(name="📁 Categoria", value=categoria.mention, inline=False)
-    
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message("✅ Configurado com sucesso!", ephemeral=True)
 
-# ------------------------------------------------
-@bot.tree.command(name="criarproduto", description="Cria um novo produto na loja")
-@app_commands.describe(
-    nome="Nome do produto",
-    preco="Preço (ex: R$ 10,00)",
-    descricao="Descrição do produto",
-    imagem="URL da imagem do produto (opcional)"
-)
-@app_commands.default_permissions(administrator=True)
-async def criarproduto(
-    interaction: discord.Interaction,
-    nome: str,
-    preco: str,
-    descricao: str,
-    imagem: str = None
-):
-    if nome in db["produtos"]:
-        await interaction.response.send_message(
-            f"⚠️ Produto **{nome}** já existe! Use outro nome.",
-            ephemeral=True
-        )
-        return
-    
-    db["produtos"][nome] = {
-        "preco": preco,
-        "descricao": descricao,
-        "imagem": imagem
-    }
-    save_db(db)
-    
+@bot.tree.command(name="produup", description="Menu de pacotes de salas")
+async def produup(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="✅ Produto Criado",
-        description=f"O produto **{nome}** foi criado com sucesso!",
-        color=discord.Color.green()
-    )
-    embed.add_field(name="💰 Preço", value=preco, inline=True)
-    embed.add_field(name="📝 Descrição", value=descricao, inline=False)
-    if imagem:
-        embed.set_thumbnail(url=imagem)
-    
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-# ------------------------------------------------
-@bot.tree.command(name="listarprodutos", description="Lista todos os produtos cadastrados")
-@app_commands.default_permissions(administrator=True)
-async def listarprodutos(interaction: discord.Interaction):
-    if not db["produtos"]:
-        await interaction.response.send_message(
-            "📦 Nenhum produto cadastrado ainda.",
-            ephemeral=True
-        )
-        return
-    
-    embed = discord.Embed(
-        title="📦 Produtos Cadastrados",
-        description="Lista de todos os produtos disponíveis:",
+        title="SALAS AUTOMATICAS! - GB STORE",
+        description="Selecione o pacote desejado no menu abaixo para prosseguir com a compra.",
         color=discord.Color.blue()
     )
-    
-    for nome, info in db["produtos"].items():
-        embed.add_field(
-            name=f"🛒 {nome}",
-            value=f"**Preço:** {info['preco']}\n**Descrição:** {info['descricao'][:50]}...",
-            inline=False
-        )
-    
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    # Imagem atualizada
+    embed.set_image(
+        url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/sensi_ios.png"
+    )
+    await interaction.response.send_message(embed=embed, view=ProduUpView())
 
-# ------------------------------------------------
-@bot.tree.command(name="deletarproduto", description="Remove um produto")
-@app_commands.describe(nome="Nome do produto a remover")
-@app_commands.default_permissions(administrator=True)
-async def deletarproduto(interaction: discord.Interaction, nome: str):
-    if nome not in db["produtos"]:
-        await interaction.response.send_message(
-            f"❌ Produto **{nome}** não encontrado.",
-            ephemeral=True
-        )
-        return
-    
-    del db["produtos"][nome]
-    save_db(db)
-    
-    await interaction.response.send_message(
-        f"✅ Produto **{nome}** removido com sucesso!",
-        ephemeral=True
-    )
-
-# ------------------------------------------------
-@bot.tree.command(name="enviarproduto", description="Envia embed de um produto em um canal")
-@app_commands.describe(
-    nome="Nome do produto",
-    canal="Canal onde o produto será enviado",
-    mensagem_botao="Texto do botão",
-    link_botao="Link do botão (ex: link do WhatsApp)"
-)
-@app_commands.default_permissions(administrator=True)
-async def enviarproduto(
-    interaction: discord.Interaction,
-    nome: str,
-    canal: discord.TextChannel,
-    mensagem_botao: str,
-    link_botao: str
-):
-    produto = db["produtos"].get(nome)
-    if not produto:
-        await interaction.response.send_message(
-            f"❌ Produto **{nome}** não encontrado. Use `/listarprodutos` para ver os disponíveis.",
-            ephemeral=True
-        )
-        return
-    
-    embed = discord.Embed(
-        title=f"🛒 {nome}",
-        description=produto["descricao"],
-        color=discord.Color.blue()
-    )
-    embed.add_field(name="💰 Preço", value=produto["preco"], inline=False)
-    
-    if produto["imagem"]:
-        embed.set_image(url=produto["imagem"])
-    
-    embed.set_footer(text="GB STORE • Clique no botão para comprar")
-    
-    view = discord.ui.View(timeout=None)  # View permanente
-    view.add_item(
-        discord.ui.Button(
-            label=mensagem_botao,
-            url=link_botao,
-            style=discord.ButtonStyle.link,
-            emoji="🛒"
-        )
-    )
-    
-    try:
-        await canal.send(embed=embed, view=view)
-        await interaction.response.send_message(
-            f"✅ Produto **{nome}** enviado em {canal.mention}",
-            ephemeral=True
-        )
-    except discord.Forbidden:
-        await interaction.response.send_message(
-            f"❌ Não tenho permissão para enviar mensagens em {canal.mention}",
-            ephemeral=True
-        )
-
-# ------------------------------------------------
-@bot.tree.command(name="ajuda", description="Mostra todos os comandos disponíveis")
-async def ajuda(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="📚 Comandos do Bot",
-        description="Lista de comandos disponíveis:",
-        color=discord.Color.purple()
-    )
-    
-    embed.add_field(
-        name="⚙️ `/configurar`",
-        value="Configura PIX, cargo admin e categoria de tickets",
-        inline=False
-    )
-    embed.add_field(
-        name="➕ `/criarproduto`",
-        value="Cria um novo produto na loja",
-        inline=False
-    )
-    embed.add_field(
-        name="📋 `/listarprodutos`",
-        value="Lista todos os produtos cadastrados",
-        inline=False
-    )
-    embed.add_field(
-        name="🗑️ `/deletarproduto`",
-        value="Remove um produto",
-        inline=False
-    )
-    embed.add_field(
-        name="📤 `/enviarproduto`",
-        value="Envia embed do produto em um canal",
-        inline=False
-    )
-    embed.add_field(
-        name="❓ `/ajuda`",
-        value="Mostra esta mensagem",
-        inline=False
-    )
-    
-    embed.set_footer(text="GB STORE • Use / para ver os comandos")
-    
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-# ================= START =================
-print("🚀 Iniciando bot...")
 bot.run(TOKEN)
