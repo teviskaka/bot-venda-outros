@@ -185,7 +185,7 @@ async def setup(interaction: discord.Interaction, pix: str, cargo_admin: discord
 @bot.tree.command(name="produup", description="Menu de pacotes de salas")
 async def produup(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="SALAS AUTOMATICAS! - GB STORE",
+        title="SENSI ANDROID! - GB STORE",
         description="Selecione o pacote desejado no menu abaixo para prosseguir com a compra.",
         color=discord.Color.blue()
     )
@@ -220,4 +220,5 @@ async def produup3(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=ProduUpView("Mensagem UPDOW 3: Edite aqui."))
 
 bot.run(TOKEN)
+
 
