@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import json
 import os
 import sys
@@ -7,7 +8,7 @@ import sys
 # ================= TOKEN =================
 TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
-    print("❌ DISCORD_TOKEN não definido")
+    print("❌ ERRO: DISCORD_TOKEN não definido")
     sys.exit(1)
 
 # ================= DATABASE =================
@@ -17,41 +18,34 @@ def load_db():
     if not os.path.exists(DB_FILE):
         return {
             "config": {
-                "pix": None,
+                "pix": "Não configurado",
                 "cargo_admin": None,
                 "categoria": None
-            }
+            },
+            "produtos": {}
         }
     with open(DB_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def save_db(data):
+def save_db(db):
     with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+        json.dump(db, f, indent=4, ensure_ascii=False)
 
 db = load_db()
 
 # ================= BOT =================
-class MyBot(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.default()
-        intents.members = True
-        intents.message_content = True
-        super().__init__(command_prefix="!", intents=intents)
-
-    async def setup_hook(self):
-        await self.tree.sync()
-        print("✅ Slash commands sincronizados")
-
-bot = MyBot()
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
+    await bot.tree.sync()
     print(f"✅ Bot online como {bot.user}")
 
-# ================= SETUP =================
-@bot.tree.command(name="setup", description="Configura PIX, cargo admin e categoria")
-async def setup(
+# ================= COMANDOS =================
+
+@bot.tree.command(name="configurar", description="Configura PIX, cargo admin e categoria")
+async def configurar(
     interaction: discord.Interaction,
     pix: str,
     cargo_admin: discord.Role,
@@ -67,92 +61,72 @@ async def setup(
         ephemeral=True
     )
 
-# ================= CRIAR PRODUTO =================
-@bot.tree.command(name="criarproduto", description="Cria um carrinho de compra")
+# ------------------------------------------------
+
+@bot.tree.command(name="criarproduto", description="Cria um produto")
 async def criarproduto(
     interaction: discord.Interaction,
-    cliente: discord.Member,
-    produto: str,
-    valor: str
+    nome: str,
+    preco: str,
+    descricao: str,
+    imagem: str = None
 ):
-    cfg = db["config"]
-
-    if not all(cfg.values()):
-        return await interaction.response.send_message(
-            "❌ Use /setup antes.",
-            ephemeral=True
-        )
-
-    guild = interaction.guild
-    categoria = guild.get_channel(cfg["categoria"])
-
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        cliente: discord.PermissionOverwrite(
-            view_channel=True,
-            send_messages=True,
-            read_message_history=True
-        ),
-        guild.get_role(cfg["cargo_admin"]): discord.PermissionOverwrite(
-            view_channel=True,
-            send_messages=True
-        )
+    db["produtos"][nome] = {
+        "preco": preco,
+        "descricao": descricao,
+        "imagem": imagem
     }
-
-    canal = await guild.create_text_channel(
-        name=f"🛒-{cliente.name}",
-        category=categoria,
-        overwrites=overwrites
-    )
-
-    embed = discord.Embed(
-        title="🛒 Carrinho Aberto",
-        description=(
-            f"👤 Cliente: {cliente.mention}\n"
-            f"📦 Produto: **{produto}**\n"
-            f"💰 Valor: **{valor}**\n\n"
-            f"💳 **PIX:** `{cfg['pix']}`\n\n"
-            "📨 Envie o comprovante neste canal."
-        ),
-        color=discord.Color.blue()
-    )
-
-    await canal.send(cliente.mention, embed=embed)
+    save_db(db)
 
     await interaction.response.send_message(
-        f"✅ Carrinho criado: {canal.mention}",
+        f"✅ Produto **{nome}** criado!",
         ephemeral=True
     )
 
-# ================= ENVIAR PRODUTO =================
-@bot.tree.command(name="enviarproduto", description="Envia o produto para o cliente")
+# ------------------------------------------------
+
+@bot.tree.command(name="enviarproduto", description="Envia embed de um produto")
 async def enviarproduto(
     interaction: discord.Interaction,
-    cliente: discord.Member,
-    mensagem: str
+    nome: str,
+    canal: discord.TextChannel,
+    mensagem_botao: str,
+    link_botao: str
 ):
-    if not any(r.id == db["config"]["cargo_admin"] for r in interaction.user.roles):
+    produto = db["produtos"].get(nome)
+
+    if not produto:
         return await interaction.response.send_message(
-            "❌ Sem permissão.",
+            "❌ Produto não encontrado.",
             ephemeral=True
         )
 
     embed = discord.Embed(
-        title="📦 Produto Entregue",
-        description=mensagem,
-        color=discord.Color.green()
+        title=f"🛒 {nome}",
+        description=produto["descricao"],
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="💰 Preço", value=produto["preco"], inline=False)
+
+    if produto["imagem"]:
+        embed.set_image(url=produto["imagem"])
+
+    embed.set_footer(text="GB STORE")
+
+    view = discord.ui.View()
+    view.add_item(
+        discord.ui.Button(
+            label=mensagem_botao,
+            url=link_botao,
+            style=discord.ButtonStyle.link
+        )
     )
 
-    try:
-        await cliente.send(embed=embed)
-        await interaction.response.send_message(
-            "✅ Produto enviado no privado do cliente!",
-            ephemeral=True
-        )
-    except:
-        await interaction.response.send_message(
-            "❌ Não consegui enviar DM ao cliente.",
-            ephemeral=True
-        )
+    await canal.send(embed=embed, view=view)
+    await interaction.response.send_message(
+        f"✅ Produto enviado em {canal.mention}",
+        ephemeral=True
+    )
 
+# ================= START =================
 bot.run(TOKEN)
