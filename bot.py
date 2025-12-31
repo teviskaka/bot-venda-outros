@@ -34,6 +34,10 @@ db = load_db()
 # ================== PACOTES ==================
 PACOTES_SALAS = {
     "50": {"label": "10 Salas 💎", "preco": "R$ 3,00", "mensagem": "Crie Sala Automaticamente!"},
+    "100": {"label": "30 Salas 💎", "preco": "R$ 6,00", "mensagem": "Crie Sala Automaticamente!"},
+    "300": {"label": "50 Salas 💎", "preco": "R$ 10,00", "mensagem": "Crie Sala Automaticamente!"},
+    "500": {"label": "100 Salas 💎", "preco": "R$ 18,00", "mensagem": "Crie Sala Automaticamente!"},
+    "1000": {"label": "300 Salas 💎", "preco": "R$ 60,00", "mensagem": "Crie Sala Automaticamente!"}
 }
 
 # ================== VIEW ADMIN ==================
@@ -94,9 +98,8 @@ class ProduUpView(discord.ui.View):
             color=discord.Color.orange()
         )
 
-        # Imagem atualizada apenas com 1 UpDown e texto Sensi iOS
         embed.set_image(
-            url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/sensi_ios.png"
+            url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/ChatGPT_Image_30_de_dez._de_2025_22_36_10.png"
         )
 
         button = discord.ui.Button(label="Abrir Carrinho", style=discord.ButtonStyle.green, emoji="🛒")
@@ -189,9 +192,8 @@ async def produup(interaction: discord.Interaction):
         description="Selecione o pacote desejado no menu abaixo para prosseguir com a compra.",
         color=discord.Color.blue()
     )
-    # Imagem atualizada
     embed.set_image(
-        url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/sensi_ios.png"
+        url="https://cdn.discordapp.com/attachments/1447763890225287269/1455736408898797729/ChatGPT_Image_30_de_dez._de_2025_22_36_10.png"
     )
     await interaction.response.send_message(embed=embed, view=ProduUpView())
 
